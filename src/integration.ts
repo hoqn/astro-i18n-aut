@@ -73,33 +73,36 @@ I18nParameters): AstroIntegration {
       "astro:config:setup": async ({ config, command, injectRoute }) => {
         ensureValidConfig(config);
 
+        const srcDirPath = removeLeadingSlashWindows(config.srcDir.pathname);
+
         let included: string[] = ensurePathsHaveConfigSrcDirPathname(
           typeof include === "string" ? [include] : include,
-          config.srcDir.pathname
+          srcDirPath
         );
         let excluded: string[] = ensurePathsHaveConfigSrcDirPathname(
           typeof exclude === "string" ? [exclude] : exclude,
-          config.srcDir.pathname
+          srcDirPath
         );
 
-        const pagesPath = path.join(config.srcDir.pathname, "pages");
-
-        const pagesPathTmpRoot = path.join(
-          config.srcDir.pathname,
+        const pagesPath = path.posix.join(srcDirPath, "pages");
+        const pagesPathTmpRoot = path.posix.join(
+          srcDirPath,
           // tmp filename from https://github.com/withastro/astro/blob/e6bff651ff80466b3e862e637d2a6a3334d8cfda/packages/astro/src/core/routing/manifest/create.ts#L279
           "astro_tmp_pages"
         );
         await forEachNonDefaultLocale(locales, defaultLocale, (locale) => {
           pagesPathTmp[locale] = `${pagesPathTmpRoot}_${locale}`;
         });
-
+        
         if (command === "build") {
           await removePagesPathTmp();
           await Promise.all(
             Object.keys(locales)
-              .filter((locale) => locale !== defaultLocale)
-              .map((locale) => fs.copy(pagesPath, pagesPathTmp[locale]))
-          );
+            .filter((locale) => locale !== defaultLocale)
+            .map((locale) => {
+              return fs.copy(pagesPath, pagesPathTmp[locale]);
+            })
+            );
         }
 
         const entries = fg.stream(included, {
@@ -121,7 +124,7 @@ I18nParameters): AstroIntegration {
             warnIsInvalidPage(
               extname,
               path.join(relativePath, parsedPath.base),
-              config.srcDir.pathname
+              srcDirPath
             );
             continue;
           }
@@ -129,10 +132,10 @@ I18nParameters): AstroIntegration {
           await forEachNonDefaultLocale(locales, defaultLocale, (locale) => {
             const entryPoint =
               command === "build"
-                ? path.join(pagesPathTmp[locale], relativePath, parsedPath.base)
-                : path.join(pagesPath, relativePath, parsedPath.base);
+                ? path.posix.join(pagesPathTmp[locale], relativePath, parsedPath.base)
+                : path.posix.join(pagesPath, relativePath, parsedPath.base);
 
-            const pattern = path.join(
+            const pattern = path.posix.join(
               config.base,
               locale,
               relativePath,
@@ -201,10 +204,14 @@ function ensurePathsHaveConfigSrcDirPathname(
 ) {
   return filePaths.map((filePath) => {
     if (!filePath.includes(configSrcDirPathname)) {
-      return path.join(configSrcDirPathname, filePath);
+      return path.posix.join(configSrcDirPathname, filePath);
     }
     return filePath;
   });
+}
+
+function removeLeadingSlashWindows(path: string) {
+  return path.startsWith('/') && path[2] === ':' ? path.substring(1) : path;
 }
 
 async function forEachNonDefaultLocale(
